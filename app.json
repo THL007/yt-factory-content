@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Content desk",
+    "slug": "yt-factory-content",
+    "version": "1.0.0",
+    "scheme": "ytfcontent",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "web": {
+      "output": "single",
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png",
+      "name": "Content desk",
+      "shortName": "Content",
+      "themeColor": "#f3f6f7",
+      "backgroundColor": "#f3f6f7"
+    },
+    "experiments": {
+      "baseUrl": "/yt-factory-content",
+      "typedRoutes": false
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}

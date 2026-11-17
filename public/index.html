@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Content desk · YT Factory</title>
+    <meta name="description" content="Script stage of the YT factory: write the script from the research brief, then hand off to production." />
+    <meta name="theme-color" content="#f3f6f7" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Content" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Hedvig+Letters+Serif:opsz@12..24&family=Geist:wght@400;500&display=swap" rel="stylesheet" />
+    <style id="expo-reset">#root { display: block; min-height: 100%; }</style>
+  </head>
+  <body>
+    <noscript>The content desk needs JavaScript to reach the factory API.</noscript>
+    <div id="root"></div>
+    <script>
+      if ("serviceWorker" in navigator && location.hostname !== "localhost") {
+        window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js"); });
+      }
+    </script>
+  </body>
+</html>
