@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.expo/
+.hallmark/shots/
+.hallmark/before/
+.hallmark/salt
