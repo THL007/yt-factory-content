@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Bot, CircleCheck, FileText, Inbox, List, RotateCw, ShieldCheck, UserRound, type LucideIcon } from "lucide-react";
+import { Bot, CircleAlert, Eye, CircleCheck, FileText, Inbox, List, RotateCw, ShieldCheck, UserRound, type LucideIcon } from "lucide-react";
 import { ago, api, Me, QueueRow, STAGE_LABEL } from "../lib/api";
 import { Ic } from "./Icons";
 
@@ -18,8 +18,11 @@ function readFilter() {
 
 function ScriptState({ r }: { r: QueueRow }) {
   if (r.stage !== "script") return <span className="state state--done"><Ic i={CircleCheck} s={14} />{STAGE_LABEL[r.stage] || r.stage}</span>;
-  if (!r.script_version) return <span className="state state--new"><Ic i={FileText} s={14} />Not started</span>;
-  return <span className="state"><Ic i={r.rights_checked ? ShieldCheck : FileText} s={14} />Draft v{r.script_version}</span>;
+  if (r.draft_status === "queued" || r.draft_status === "running") return <span className="state state--new"><Ic i={Bot} s={14} />Agent drafting</span>;
+  if (r.draft_status === "failed" && !r.script_version) return <span className="state state--fail"><Ic i={CircleAlert} s={14} />Draft failed</span>;
+  if (!r.script_version) return <span className="state state--new"><Ic i={FileText} s={14} />No draft yet</span>;
+  if (r.script_author === "agent") return <span className="state state--review"><Ic i={Eye} s={14} />Agent draft v{r.script_version}, to review</span>;
+  return <span className="state"><Ic i={r.rights_checked ? ShieldCheck : FileText} s={14} />Edited v{r.script_version}</span>;
 }
 
 export function Queue({ me, onOpen }: { me: Me; onOpen: (id: string) => void }) {
@@ -43,8 +46,8 @@ export function Queue({ me, onOpen }: { me: Me; onOpen: (id: string) => void }) 
     <section className="page">
       <div className="page__head">
         <div>
-          <h1 className="page__title">Scripts to write</h1>
-          <p className="page__lede">Videos whose research brief is done. Take the oldest first, write the script, then hand it to production.</p>
+          <h1 className="page__title">Scripts to review</h1>
+          <p className="page__lede">The script agent drafts every video as soon as its brief is approved. Review the oldest draft first: approve it, edit it, or ask for a redo.</p>
         </div>
       </div>
 

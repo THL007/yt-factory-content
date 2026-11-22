@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, BookCheck, CircleAlert, CircleCheck, Clapperboard, Compass, ExternalLink, FileOutput, Film, Hand, History, Image as ImageIcon,
-  ListOrdered, Megaphone, Mic, Pause, Plus, RotateCw, Save, ShieldCheck, Trash2, Type, Undo2, Clock, PenLine, X,
+  ListOrdered, Megaphone, Mic, Pause, Plus, RotateCw, RotateCcw, Save, ShieldCheck, Trash2, Type, Undo2, Clock, PenLine, X, Bot, Sparkles, MessageSquareText,
 } from "lucide-react";
 import {
-  ago, api, Beat, canWrite, countWords, Detail, fmtTime, isCue, Me, parseTarget, RESEARCH_URL, Script, ScriptInput, spokenWords, STAGE_LABEL,
+  ago, api, Beat, canWrite, countWords, Detail, fmtTime, isCue, Me, parseTarget, Part, PART_LABEL, RESEARCH_URL, Script, ScriptInput, spokenWords, STAGE_LABEL,
 } from "../lib/api";
 import { Ic, SheetHead } from "./Icons";
 
@@ -34,6 +34,7 @@ export function Desk({ id, me, onBack }: { id: string; me: Me; onBack: () => voi
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [wpm, setWpm] = useState(WPM_DEFAULT);
+  const [redo, setRedo] = useState<null | { part: Part | null }>(null);
 
   const take = (nd: Detail, keepForm = false) => {
     setD(nd);
@@ -43,6 +44,13 @@ export function Desk({ id, me, onBack }: { id: string; me: Me; onBack: () => voi
     try { take(await api.video(id)); setError(""); } catch (e: any) { setError(e.message); }
   }, [id]);
   useEffect(() => { load(); }, [load]);
+  // While the script agent drafts, keep the page current.
+  const drafting = !!d?.draft_job && ["queued", "running"].includes(d.draft_job.status);
+  useEffect(() => {
+    if (!drafting) return;
+    const t = setInterval(async () => { try { const nd = await api.video(id); take(nd, !(nd.draft_job && nd.draft_job.status === "done")); } catch { /* next tick */ } }, 8000);
+    return () => clearInterval(t);
+  }, [drafting, id]);
   useEffect(() => {
     if (!dirty) return;
     const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); };
@@ -65,6 +73,8 @@ export function Desk({ id, me, onBack }: { id: string; me: Me; onBack: () => voi
   const inScript = video.stage === "script";
   const mine = video.owner_user_id === me.user.id;
   const writer = canWrite(me.role) && inScript;
+  const ro = !writer || drafting;
+  const agentDraft = d.script?.author_kind === "agent";
   const claimedByOther = !!video.owner_user_id && !mine && video.owner_kind !== "agent";
 
   async function save() {
@@ -72,9 +82,17 @@ export function Desk({ id, me, onBack }: { id: string; me: Me; onBack: () => voi
     try { const nd = await api.save(id, f!); take(nd); setMsg({ ok: true, text: `Saved as version ${nd.version}.` }); }
     catch (e: any) { setMsg({ ok: false, text: e.message }); } finally { setBusy(null); }
   }
+  async function askDraft(part: Part | null, feedback: string) {
+    if (dirty && !window.confirm("Your unsaved changes will be replaced by the agent's draft. Continue?")) return;
+    setBusy("draft"); setMsg(null);
+    try { take(await api.draft(id, part, feedback)); setRedo(null); window.scrollTo({ top: 0 }); }
+    catch (e: any) { setMsg({ ok: false, text: e.message }); } finally { setBusy(null); }
+  }
+  const openRedo = writer && !drafting ? (part: Part | null) => { setRedo({ part }); window.scrollTo({ top: 0 }); } : undefined;
+
   async function act(a: "claim" | "release" | "handoff") {
     if (a === "handoff" && dirty) { setMsg({ ok: false, text: "Save your changes before handing off." }); return; }
-    if (a === "handoff" && !window.confirm("Hand this script to production? The video moves to Assets and leaves your queue.")) return;
+    if (a === "handoff" && !window.confirm("Approve this script and send it to production? The video moves to Assets and leaves your queue.")) return;
     setBusy(a); setMsg(null);
     try { take(await api.action(id, a), a !== "handoff"); if (a === "handoff") setMsg({ ok: true, text: "Handed off. The video is now in Assets." }); }
     catch (e: any) { setMsg({ ok: false, text: e.message }); } finally { setBusy(null); }
@@ -92,9 +110,10 @@ export function Desk({ id, me, onBack }: { id: string; me: Me; onBack: () => voi
         </div>
         {writer && (
           <div className="actions">
-            {d.missing.length === 0 && !dirty
-              ? <button type="button" className="btn btn--primary" disabled={!!busy} aria-busy={busy === "handoff"} onClick={() => act("handoff")}><Ic i={FileOutput} />{busy === "handoff" ? "Handing off…" : "Hand off to Assets"}</button>
+            {d.missing.length === 0 && !dirty && !drafting
+              ? <button type="button" className="btn btn--primary" disabled={!!busy} aria-busy={busy === "handoff"} onClick={() => act("handoff")}><Ic i={FileOutput} />{busy === "handoff" ? "Sending…" : "Approve and send to Assets"}</button>
               : null}
+            {d.script && openRedo && <button type="button" className="btn" disabled={!!busy} onClick={() => openRedo(null)}><Ic i={RotateCcw} />Redo whole draft</button>}
             {!mine && <button type="button" className="btn" disabled={!!busy} onClick={() => act("claim")}><Ic i={Hand} />{claimedByOther ? "Take over" : "Claim it"}</button>}
             {mine && <button type="button" className="link-btn" disabled={!!busy} onClick={() => act("release")}><Ic i={Undo2} s={14} />Release</button>}
           </div>
@@ -108,17 +127,30 @@ export function Desk({ id, me, onBack }: { id: string; me: Me; onBack: () => voi
       <div className="desk">
         <BriefPanel d={d} />
         <div className="desk__main">
-          {writer && <Checklist missing={d.missing} dirty={dirty} />}
-          <Outline f={f} set={set} ro={!writer} wpm={wpm} />
-          <SpokenScript f={f} set={set} ro={!writer} wpm={wpm} setWpm={setWpm} />
-          <Packaging f={f} set={set} ro={!writer} brief={d.brief} />
-          <Rights f={f} set={set} ro={!writer} d={d} />
-          {writer && <SendBack id={id} onDone={take} />}
-          <Versions d={d} onRestore={(s) => { setF(fromScript(s)); setDirty(true); setMsg({ ok: true, text: `Version ${s.version} is in the editor. Save to make it the newest version.` }); window.scrollTo({ top: 0 }); }} ro={!writer} />
+          <DraftBanner d={d} drafting={drafting} agentDraft={agentDraft} writer={writer} busy={busy === "draft"} onRetry={() => askDraft(d.draft_job?.part || null, d.draft_job?.feedback || "")} />
+          {redo && <RedoPanel part={redo.part} busy={busy === "draft"} onCancel={() => setRedo(null)} onSend={(note) => askDraft(redo.part, note)} />}
+          {!d.script && !drafting ? (
+            <section className="sheet empty">
+              <Ic i={Bot} s={28} />
+              <p className="empty__title">No draft yet.</p>
+              <p>The script agent writes the first full draft from the brief: outline, spoken script with cues, titles, thumbnail text and rights flags. You review and approve it.</p>
+              {writer && <button type="button" className="btn btn--primary" disabled={!!busy} aria-busy={busy === "draft"} onClick={() => askDraft(null, "")}><Ic i={Sparkles} />{busy === "draft" ? "Asking…" : "Ask the agent for a draft"}</button>}
+            </section>
+          ) : (
+            <>
+              {writer && !drafting && <Checklist missing={d.missing} dirty={dirty} agentDraft={agentDraft} />}
+              <Outline f={f} set={set} ro={ro} wpm={wpm} onRedo={openRedo} />
+              <SpokenScript f={f} set={set} ro={ro} wpm={wpm} setWpm={setWpm} onRedo={openRedo} />
+              <Packaging f={f} set={set} ro={ro} brief={d.brief} onRedo={openRedo} />
+              <Rights f={f} set={set} ro={ro} d={d} onRedo={openRedo} />
+            </>
+          )}
+          {writer && !drafting && <SendBack id={id} onDone={take} />}
+          <Versions d={d} onRestore={(s) => { setF(fromScript(s)); setDirty(true); setMsg({ ok: true, text: `Version ${s.version} is in the editor. Save to make it the newest version.` }); window.scrollTo({ top: 0 }); }} ro={ro} />
         </div>
       </div>
 
-      {writer && (dirty || busy === "save") && (
+      {writer && !drafting && (dirty || busy === "save") && (
         <div className="savebar is-dirty" role="region" aria-label="Save">
           <p className="savebar__state">{dirty ? "Unsaved changes" : "Saving…"}</p>
           <button type="button" className="btn btn--primary" disabled={!dirty || !!busy} aria-busy={busy === "save"} onClick={save}><Ic i={Save} />{busy === "save" ? "Saving…" : "Save version"}</button>
@@ -186,8 +218,10 @@ function BriefPanel({ d }: { d: Detail }) {
 }
 
 // ---------- what hand-off still needs ----------
-function Checklist({ missing, dirty }: { missing: string[]; dirty: boolean }) {
-  if (!missing.length && !dirty) return <div className="check check--ready"><Ic i={CircleCheck} />Ready for production. Hand it off when you are happy with it.</div>;
+function Checklist({ missing, dirty, agentDraft }: { missing: string[]; dirty: boolean; agentDraft: boolean }) {
+  if (!missing.length && !dirty) return <div className="check check--ready"><Ic i={CircleCheck} />Ready. Approve it to send it to production.</div>;
+  if (!dirty && missing.length === 1 && missing[0] === "the rights check")
+    return <div className="check"><Ic i={ListOrdered} /><p>{agentDraft ? "Review the agent’s draft: e" : "E"}dit what you want, tick the rights check at the bottom and save. Then approve it.</p></div>;
   return (
     <div className="check">
       <Ic i={ListOrdered} />
@@ -201,13 +235,22 @@ type SetF = <K extends keyof ScriptInput>(k: K, v: ScriptInput[K]) => void;
 // Spoken seconds for a line at the chosen pace.
 const secs = (t: string, wpm: number) => (countWords(t) / wpm) * 60;
 
-function Outline({ f, set, ro, wpm }: { f: ScriptInput; set: SetF; ro: boolean; wpm: number }) {
+function PartHead({ i, title, part, onRedo }: { i: Parameters<typeof SheetHead>[0]["i"]; title: string; part: Part; onRedo?: (p: Part) => void }) {
+  return (
+    <div className="parthead">
+      <SheetHead i={i}>{title}</SheetHead>
+      {onRedo && <button type="button" className="icon-btn" aria-label={`Ask the agent to redo: ${title}`} title={`Ask the agent to redo: ${title}`} onClick={() => onRedo(part)}><Ic i={RotateCcw} /></button>}
+    </div>
+  );
+}
+
+function Outline({ f, set, ro, wpm, onRedo }: { f: ScriptInput; set: SetF; ro: boolean; wpm: number; onRedo?: (p: Part) => void }) {
   const hookS = secs(f.hook || "", wpm);
   const beats = f.beats;
   const upd = (i: number, p: Partial<Beat>) => set("beats", beats.map((b, j) => (j === i ? { ...b, ...p } : b)));
   return (
     <section className="sheet form">
-      <SheetHead i={ListOrdered}>Outline</SheetHead>
+      <PartHead i={ListOrdered} title="Outline" part="outline" onRedo={onRedo} />
       <label className="field">
         <span className="field__label field__label--row">Hook, spoken in 3 seconds or less<span className={`meter${hookS > 3 ? " meter--over" : ""}`}>{countWords(f.hook || "")} words, about {hookS.toFixed(1)} s</span></span>
         <textarea className="input input--area input--lead" rows={3} readOnly={ro} value={f.hook || ""} onChange={(e) => set("hook", e.target.value)} placeholder="The first sentence the viewer hears" />
@@ -236,7 +279,7 @@ function Outline({ f, set, ro, wpm }: { f: ScriptInput; set: SetF; ro: boolean; 
 }
 
 // ---------- the signature: the spoken script with its running clock ----------
-function SpokenScript({ f, set, ro, wpm, setWpm }: { f: ScriptInput; set: SetF; ro: boolean; wpm: number; setWpm: (n: number) => void }) {
+function SpokenScript({ f, set, ro, wpm, setWpm, onRedo }: { f: ScriptInput; set: SetF; ro: boolean; wpm: number; setWpm: (n: number) => void; onRedo?: (p: Part) => void }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [mode, setMode] = useState<"write" | "read">(ro ? "read" : "write");
   const text = f.script_text || "";
@@ -267,6 +310,7 @@ function SpokenScript({ f, set, ro, wpm, setWpm }: { f: ScriptInput; set: SetF; 
           {!ro && <button type="button" className="seg__opt" aria-pressed={mode === "write"} onClick={() => setMode("write")}><Ic i={PenLine} s={14} />Write</button>}
           <button type="button" className="seg__opt" aria-pressed={mode === "read"} onClick={() => setMode("read")}><Ic i={Clock} s={14} />Read-through</button>
         </div>
+        {onRedo && <button type="button" className="icon-btn" aria-label="Ask the agent to redo: Spoken script" title="Ask the agent to redo: Spoken script" onClick={() => onRedo("script")}><Ic i={RotateCcw} /></button>}
       </div>
 
       <dl className="clock">
@@ -309,13 +353,13 @@ function SpokenScript({ f, set, ro, wpm, setWpm }: { f: ScriptInput; set: SetF; 
   );
 }
 
-function Packaging({ f, set, ro, brief }: { f: ScriptInput; set: SetF; ro: boolean; brief: Detail["brief"] }) {
+function Packaging({ f, set, ro, brief, onRedo }: { f: ScriptInput; set: SetF; ro: boolean; brief: Detail["brief"]; onRedo?: (p: Part) => void }) {
   const titles = f.title_options;
   const tw = countWords(f.thumbnail_text || "");
   const ideas = (brief?.title_ideas || []).filter((t) => !titles.includes(t));
   return (
     <section className="sheet form">
-      <SheetHead i={Type}>Titles and thumbnail</SheetHead>
+      <PartHead i={Type} title="Titles and thumbnail" part="packaging" onRedo={onRedo} />
       <ol className="titles">
         {titles.map((t, i) => (
           <li key={i} className="titles__row">
@@ -342,12 +386,12 @@ function Packaging({ f, set, ro, brief }: { f: ScriptInput; set: SetF; ro: boole
   );
 }
 
-function Rights({ f, set, ro, d }: { f: ScriptInput; set: SetF; ro: boolean; d: Detail }) {
+function Rights({ f, set, ro, d, onRedo }: { f: ScriptInput; set: SetF; ro: boolean; d: Detail; onRedo?: (p: Part) => void }) {
   const flags = f.rights_flags;
   const fromBrief = (d.brief?.rights_flags || []).filter((x) => !flags.includes(x));
   return (
     <section className="sheet form">
-      <SheetHead i={ShieldCheck}>Rights check</SheetHead>
+      <PartHead i={ShieldCheck} title="Rights check" part="rights" onRedo={onRedo} />
       <ul className="flags">
         {flags.map((x, i) => (
           <li key={i} className="flags__row">
@@ -414,5 +458,60 @@ function Versions({ d, onRestore, ro }: { d: Detail; onRestore: (s: Script) => v
       </ul>
       {err && <p className="field__error" role="alert">{err}</p>}
     </details>
+  );
+}
+
+// ---------- agent first: what the agent did, and asking it again ----------
+function DraftBanner({ d, drafting, agentDraft, writer, busy, onRetry }: { d: Detail; drafting: boolean; agentDraft: boolean; writer: boolean; busy: boolean; onRetry: () => void }) {
+  const j = d.draft_job;
+  if (drafting && j) return (
+    <div className="agentbar agentbar--busy" role="status">
+      <Ic i={Bot} s={20} />
+      <div>
+        <p className="agentbar__title">{j.status === "queued" ? "Waiting for the script agent to write" : "The script agent is writing"} {j.part ? `the ${PART_LABEL[j.part].toLowerCase()}` : d.script ? "a new draft" : "the first draft"}.</p>
+        <p>It works from the approved brief. This page updates by itself; editing is paused until it is done.</p>
+        {j.feedback && <p className="agentbar__note"><Ic i={MessageSquareText} s={14} />Your note: {j.feedback}</p>}
+        <span className="progress" aria-hidden="true" />
+      </div>
+    </div>
+  );
+  if (j?.status === "failed" && (!d.script || j.created_at > d.script.created_at)) return (
+    <div className="agentbar agentbar--fail" role="alert">
+      <Ic i={CircleAlert} s={20} />
+      <div>
+        <p className="agentbar__title">The script agent could not finish{j.part ? ` the ${PART_LABEL[j.part].toLowerCase()}` : ""}.</p>
+        <p>{j.error || "No reason given."}</p>
+        {writer && <button type="button" className="btn" disabled={busy} onClick={onRetry}><Ic i={RotateCw} />Ask again</button>}
+      </div>
+    </div>
+  );
+  if (agentDraft && d.script) return (
+    <div className="agentbar">
+      <Ic i={Bot} s={20} />
+      <div>
+        <p className="agentbar__title">Draft v{d.script.version} by the script agent{j?.part && j.script_version === d.script.version ? `, ${PART_LABEL[j.part].toLowerCase()} redone` : ""}, {ago(d.script.created_at)}{j?.cost_usd && j.script_version === d.script.version ? ` (US$${Number(j.cost_usd).toFixed(3)})` : ""}.</p>
+        {d.script.notes ? <p className="agentbar__note"><Ic i={MessageSquareText} s={14} />Agent’s note: {d.script.notes}</p> : <p>Review it, edit what you want or ask for a redo, then approve it.</p>}
+      </div>
+    </div>
+  );
+  return null;
+}
+
+function RedoPanel({ part, busy, onCancel, onSend }: { part: Part | null; busy: boolean; onCancel: () => void; onSend: (note: string) => void }) {
+  const [note, setNote] = useState("");
+  const what = part ? PART_LABEL[part].toLowerCase() : "whole draft";
+  return (
+    <section className="sheet form redo" aria-label="Ask the agent to redo">
+      <div className="parthead"><SheetHead i={RotateCcw}>Redo the {what}</SheetHead>
+        <button type="button" className="icon-btn" aria-label="Close" title="Close" onClick={onCancel}><Ic i={X} /></button></div>
+      <p className="field__hint">{part ? "The agent rewrites only this part; the rest of the draft stays as it is." : "The agent rewrites everything from the brief and the current draft."} Saved versions are kept.</p>
+      <label className="field"><span className="field__label">What should change (optional)</span>
+        <textarea className="input input--area" rows={3} value={note} onChange={(e) => setNote(e.target.value)} autoFocus
+          placeholder={part === "outline" ? "A stronger hook with a question; merge beats 2 and 3" : part === "packaging" ? "Shorter titles, no clickbait words" : "More conversational; aim for 8 minutes"} /></label>
+      <div className="row-gap">
+        <button type="button" className="btn btn--primary" disabled={busy} aria-busy={busy} onClick={() => onSend(note.trim())}><Ic i={Sparkles} />{busy ? "Asking…" : `Redo the ${what}`}</button>
+        <button type="button" className="btn btn--quiet" onClick={onCancel}>Cancel</button>
+      </div>
+    </section>
   );
 }

@@ -1,6 +1,7 @@
 /* Hallmark · shape: app screen · genre: editorial · theme: Studio (deal 2/3, seed script-desk-content-writers-e3ce·e089ac27·2026-11-17·r0)
  * nav: top bar, wordmark, two tabs, the Research desk link, writer and sign-out · signature: the spoken script with its running clock: words, read time against the target, and a read-through that stamps each line with its time and sets cues apart on orange guides · states: loading, empty, error, full, saving, unsaved, read-only
  * axes: light/roman-serif/warm · posture: restrained · contrast: pass · v2.0.0 · fonts: Google (Hedvig Letters Serif, Geist)
+ * 2026-11-22: agents draft first: an agent banner with its note, a redo panel (whole draft or one part, with a note), redo icons on each part head, no from-scratch editor
  * waive 72: the crop marks are drawn 14px outside each sheet on purpose (Studio)
  * dismiss 73: the clamped row-sub sits under the block row-title; the screenshots show no overlap
  * answered: the dot grid and grain stay on the top bar only; crop marks on sheets; orange fills only the one action and draws the guides */
@@ -176,6 +177,27 @@ td.num, th.num { text-align: right; }
 .savebar__state { font-size: var(--text-sm); color: var(--color-muted); }
 .savebar.is-dirty .savebar__state { color: var(--color-ink); font-weight: 500; }
 
+
+/* ---------- agent first: the agent's draft, its note, and redo ---------- */
+.agentbar { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-sm); padding: var(--space-md); background: var(--color-paper-2); border-left: 2px solid var(--color-ink); color: var(--color-ink-2); }
+.agentbar > .ic { color: var(--color-ink); margin-top: var(--space-3xs); }
+.agentbar > div { display: grid; gap: var(--space-2xs); justify-items: start; }
+.agentbar__title { font-weight: 500; color: var(--color-ink); }
+.agentbar__note { display: flex; gap: var(--space-xs); align-items: flex-start; color: var(--color-ink); max-width: 72ch; }
+.agentbar__note .ic { margin-top: var(--space-2xs); color: var(--color-muted); }
+.agentbar--busy { border-left-color: var(--color-accent); }
+.agentbar--fail { border-left-color: var(--color-error); }
+.agentbar--fail > .ic { color: var(--color-error); }
+.progress { display: block; width: 12rem; height: 2px; margin-top: var(--space-xs); background: var(--color-rule); position: relative; overflow: hidden; }
+.progress::after { content: ""; position: absolute; inset: 0; width: 30%; background: var(--color-ink); animation: slide 1.6s var(--ease-in-out) infinite; }
+@keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+.parthead { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); border-bottom: var(--rule-hair) solid var(--color-ink); padding-bottom: var(--space-sm); margin-bottom: var(--space-md); }
+.parthead .sheet__head { border: 0; margin: 0; padding: 0; }
+.redo { border-color: var(--color-ink); }
+.state--review { color: var(--color-ink); }
+.state--fail { color: var(--color-error); }
+.script__head .seg { margin-left: auto; }
+
 /* ---------- controls: printed ---------- */
 .btn { position: relative; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-xs); min-height: var(--control-h); padding: 0 var(--space-lg); border: var(--rule-hair) solid var(--color-ink); border-radius: 2px; background: var(--color-paper-hi); color: var(--color-ink); font: 500 var(--text-sm)/1 var(--font-body); cursor: pointer; transition: background-color var(--dur-micro) var(--ease-out), color var(--dur-micro) var(--ease-out), opacity var(--dur-micro) var(--ease-out); }
 .btn::after { content: ""; position: absolute; inset: 2px; border: var(--rule-hair) solid var(--color-mark); border-radius: 1px; pointer-events: none; opacity: 0.35; }
@@ -292,5 +314,5 @@ td.num, th.num { text-align: right; }
   .savebar { margin-inline: calc(var(--gutter) * -1); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .skel { animation: none; }
+  .skel, .progress::after { animation: none; }
 }

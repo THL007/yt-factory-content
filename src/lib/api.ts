@@ -7,13 +7,17 @@ export type QueueRow = {
   id: string; title_working: string; stage: string; target_length: string | null; updated_at: string; created_at: string;
   owner_user_id: string | null; owner_name: string | null; owner_kind: string | null; channel_id: string; channel_name: string; channel_language: string | null;
   research_job_id: string | null; research_mode: string | null; angle: string | null; script_version: number | null; script_saved_at: string | null;
-  rights_checked: boolean | null; script_chars: number | null;
+  rights_checked: boolean | null; script_chars: number | null; script_author: string | null; draft_status: DraftStatus | null;
 };
+export type DraftStatus = "queued" | "running" | "done" | "failed" | "cancelled";
+export type Part = "outline" | "script" | "packaging" | "rights";
+export const PART_LABEL: Record<Part, string> = { outline: "Outline", script: "Spoken script", packaging: "Titles and thumbnail", rights: "Rights flags" };
+export type DraftJob = { id: string; status: DraftStatus; part: Part | null; feedback: string | null; model: string | null; cost_usd: string | null; error: string | null; created_at: string; finished_at: string | null; script_version: number | null };
 export type Beat = { title: string; note: string };
 export type Script = {
   id: string; version: number; hook: string | null; beats: Beat[]; cta: string | null; soft_close: string | null; script_text: string | null;
   title_options: string[]; thumbnail_text: string | null; description_text: string | null; target_length: string | null;
-  rights_flags: string[]; rights_checked: boolean; notes: string | null; author_kind: string; created_at: string;
+  rights_flags: string[]; rights_checked: boolean; notes: string | null; author_kind: string; author_user_id?: string | null; created_at: string;
 };
 export type Fact = { id?: string; claim: string; source_url: string | null; source_title: string | null; verified: boolean };
 export type Reference = { id?: string; kind: "seed" | "competitor"; url: string; title: string | null; channel_name: string | null; views_seen: number | null; notes: string | null };
@@ -25,7 +29,7 @@ export type Brief = {
 };
 export type Channel = { id: string; name: string; niche: string | null; language: string | null; cadence: string | null; voice_tone: string | null };
 export type Version = { id: string; version: number; author_kind: string; author_name: string | null; created_at: string };
-export type Detail = { video: QueueRow; channel: Channel; brief: Brief | null; facts: Fact[]; references: Reference[]; script: Script | null; versions: Version[]; missing: string[] };
+export type Detail = { video: QueueRow; channel: Channel; brief: Brief | null; facts: Fact[]; references: Reference[]; script: Script | null; versions: Version[]; missing: string[]; draft_job: DraftJob | null };
 export type ScriptInput = Omit<Script, "id" | "version" | "author_kind" | "created_at">;
 
 const KEY = "ytf-content";
@@ -61,6 +65,7 @@ export const api = {
   version: (id: string, v: number) => call<Script>(`/content/videos/${id}/versions/${v}`),
   save: (id: string, b: ScriptInput) => call<Detail & { version: number }>(`/content/videos/${id}/script`, { method: "PUT", body: JSON.stringify(b) }),
   action: (id: string, act: "claim" | "release" | "handoff") => post<Detail>(`/content/videos/${id}/${act}`),
+  draft: (id: string, part: Part | null, feedback: string) => post<Detail>(`/content/videos/${id}/draft`, { part, feedback }),
   sendBack: (id: string, reason: string) => post<Detail>(`/content/videos/${id}/sendback`, { reason }),
 };
 
